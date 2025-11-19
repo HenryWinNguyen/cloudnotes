@@ -24,3 +24,37 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Soft slow movement for background halos */
+.bg-orbit {
+  animation: orbit 40s ease-in-out infinite alternate;
+}
+
+.bg-orbit-delayed {
+  animation: orbit-delayed 50s ease-in-out infinite alternate;
+}
+
+@keyframes orbit {
+  0% {
+    transform: translate3d(-10%, -5%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(5%, 10%, 0) scale(1.15);
+  }
+  100% {
+    transform: translate3d(-5%, 0%, 0) scale(1.05);
+  }
+}
+
+@keyframes orbit-delayed {
+  0% {
+    transform: translate3d(5%, 5%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-5%, -10%, 0) scale(1.2);
+  }
+  100% {
+    transform: translate3d(0%, -2%, 0) scale(1.05);
+  }
+}
+

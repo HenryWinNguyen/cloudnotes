@@ -1,110 +1,107 @@
-"use client";
-
+// app/notes/[id]/page.tsx
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { prisma } from "@/lib/prisma";
+import NoteEditor, { type EditorCell } from "@/components/NoteEditor";
+import RunPanel from "@/components/RunPanel";
 
-type Cell = { id: string; type: "markdown" | "code"; content: string };
+type NotePageProps = {
+  params: Promise<{ id: string }>;
+};
 
-export default function NotePage() {
-  const { id } = useParams<{ id: string }>();
+export default async function NotePage({ params }: NotePageProps) {
+  const { id } = await params;
 
-  // temporary local state until we wire Postgres
-  const [cells, setCells] = useState<Cell[]>([
-    { id: "c1", type: "markdown", content: "## Welcome\nThis is a markdown cell." },
-    { id: "c2", type: "code", content: 'print("Hello from Python")' },
-  ]);
-
-  function addCell(type: "markdown" | "code") {
-    const newCell: Cell = {
-      id: crypto.randomUUID(),
-      type,
-      content: type === "markdown" ? "New markdown" : "# New code",
-    };
-    setCells((prev) => [...prev, newCell]);
+  if (!id) {
+    return (
+      <div className="p-6 text-sm opacity-70">
+        Note not found (missing id).
+      </div>
+    );
   }
 
+  const note = await prisma.note.findUnique({
+    where: { id },
+    include: {
+      cells: {
+        orderBy: { order: "asc" },
+      },
+    },
+  });
+
+  if (!note) {
+    return (
+      <div className="p-6 text-sm opacity-70">
+        Note not found.
+      </div>
+    );
+  }
+
+  const initialCells: EditorCell[] =
+    note.cells.length > 0
+      ? note.cells.map((c) => ({
+          id: c.id,
+          type: c.type as "markdown" | "code",
+          content: c.content,
+        }))
+      : [
+          {
+            id: crypto.randomUUID(),
+            type: "markdown",
+            content: "## Welcome\nThis is a markdown cell.",
+          },
+          {
+            id: crypto.randomUUID(),
+            type: "code",
+            content: 'for i in range(3):\n    print("Hello from Docker", i)',
+          },
+        ];
+
+  const lastCodeCell =
+    initialCells.filter((c) => c.type === "code").at(-1)?.content ?? null;
+
   return (
-    <div className="grid grid-cols-12 gap-4">
-      {/* Sidebar */}
-      <aside className="col-span-3 rounded-2xl border border-white/10 p-3">
-        <div className="mb-2 text-sm font-semibold opacity-80">Notes</div>
-        <div className="space-y-1">
-          <Link href="/notes/demo-1" className="block rounded-md px-2 py-1 hover:bg-white/10">
-            Welcome to CloudNotes
-          </Link>
-          <Link href="/notes/demo-2" className="block rounded-md px-2 py-1 hover:bg-white/10">
-            Sample note with code
-          </Link>
-        </div>
+    <div className="min-h-[calc(100vh-3.5rem)] w-full">
+      {/* center the whole interface with a max width so it doesn't touch the screen edges */}
+      <div className="max-w-[1500px] mx-auto">
+        <div className="grid w-full gap-6 lg:grid-cols-[2.3fr,1.1fr]">
+          {/* Main note editor card */}
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-slate-950/80 p-4 shadow-xl shadow-sky-900/30">
+            <div className="flex items-start justify-between gap-2">
+              {/* Centered CloudNotes title that links back home */}
+              <div className="flex-1 text-center">
+                <Link
+                  href="/"
+                  className="inline-block text-sm font-semibold tracking-wide text-sky-400 hover:text-sky-300"
+                >
+                  CLOUDNOTES
+                </Link>
+                <h2 className="mt-1 text-lg font-semibold">
+                  {note.title || "Untitled note"}
+                </h2>
+              </div>
 
-        <div className="mt-4 flex gap-2">
-          <button
-            className="flex-1 rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-            onClick={() => addCell("markdown")}
-          >
-            + Markdown
-          </button>
-          <button
-            className="flex-1 rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-            onClick={() => addCell("code")}
-          >
-            + Code
-          </button>
-        </div>
-      </aside>
+              {/* Help toggle on the right */}
+              <details className="text-xs text-slate-300">
+                <summary className="cursor-pointer rounded-full border border-white/15 bg-slate-900/80 px-3 py-1 text-[11px] hover:bg-slate-800/80">
+                  Help
+                </summary>
+                <div className="mt-2 max-w-xs rounded-md border border-white/10 bg-black/70 p-2">
+                  <p className="opacity-80">
+                    Use markdown cells for notes and code cells for Python or
+                    C++ snippets. The run panel executes the last code cell in
+                    an isolated Docker container.
+                  </p>
+                </div>
+              </details>
+            </div>
 
-      {/* Editor center */}
-      <section className="col-span-6 rounded-2xl border border-white/10 p-3 space-y-3">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Note: {String(id)}</h2>
-        </div>
+            <NoteEditor noteId={note.id} initialCells={initialCells} />
+          </section>
 
-        {cells.map((cell) => (
-          <div key={cell.id} className="rounded-xl border border-white/10 p-3">
-            <div className="text-xs opacity-60 mb-2">{cell.type.toUpperCase()} CELL</div>
-            {cell.type === "markdown" ? (
-              <textarea
-                className="w-full bg-transparent outline-none resize-y min-h-[120px]"
-                value={cell.content}
-                onChange={(e) =>
-                  setCells((prev) =>
-                    prev.map((c) =>
-                      c.id === cell.id ? { ...c, content: e.target.value } : c
-                    )
-                  )
-                }
-              />
-            ) : (
-              <textarea
-                className="w-full font-mono text-sm bg-transparent outline-none resize-y min-h-[140px]"
-                value={cell.content}
-                onChange={(e) =>
-                  setCells((prev) =>
-                    prev.map((c) =>
-                      c.id === cell.id ? { ...c, content: e.target.value } : c
-                    )
-                  )
-                }
-              />
-            )}
-          </div>
-        ))}
-      </section>
-
-      {/* Run panel */}
-      <aside className="col-span-3 rounded-2xl border border-white/10 p-3">
-        <div className="mb-2 text-sm font-semibold opacity-80">Run panel</div>
-        <button
-          className="w-full rounded-md border border-white/20 px-3 py-2 text-sm hover:bg-white/10"
-          onClick={() => alert("Run cell stub. We will wire Docker later.")}
-        >
-          Run selected cell
-        </button>
-        <div className="mt-3 text-xs opacity-70">
-          Logs will appear here when the runner is connected.
+          {/* Run panel card */}
+          <RunPanel noteId={note.id} lastCodeCell={lastCodeCell} />
         </div>
-      </aside>
+      </div>
     </div>
   );
 }
